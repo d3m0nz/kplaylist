@@ -28,18 +28,39 @@ define('GETID3_DB_TABLE', 'files');
 
 // CREATE DATABASE `getid3`;
 
-ob_start();
-if (!mysql_connect(GETID3_DB_HOST, GETID3_DB_USER, GETID3_DB_PASS)) {
-	$errormessage = ob_get_contents();
-	ob_end_clean();
-	die('Could not connect to MySQL host: <blockquote style="background-color: #FF9933; padding: 10px;">'.mysql_error().'</blockquote>');
+$mysqli = @new mysqli(GETID3_DB_HOST, GETID3_DB_USER, GETID3_DB_PASS, GETID3_DB_DB);
+if ($mysqli->connect_errno) {
+$errormessage = $mysqli->connect_error;
+die('Could not connect to MySQL host: <blockquote style="background-color: #FF9933; padding: 10px;">'.$errormessage.'</blockquote>');
 }
-if (!mysql_select_db(GETID3_DB_DB)) {
-	$errormessage = ob_get_contents();
-	ob_end_clean();
-	die('Could not select database: <blockquote style="background-color: #FF9933; padding: 10px;">'.mysql_error().'</blockquote>');
+
+if (!$mysqli->set_charset('utf8mb4')) {
+die('Could not set database charset: <blockquote style="background-color: #FF9933; padding: 10px;">'.$mysqli->error.'</blockquote>');
 }
-ob_end_clean();
+
+// Lightweight compatibility helpers for legacy mysql_* calls in this demo
+function mysql_error() {
+global $mysqli;
+return $mysqli->error;
+}
+
+function mysql_query($query) {
+global $mysqli;
+return $mysqli->query($query);
+}
+
+function mysql_fetch_array($result) {
+return $result ? $result->fetch_array(MYSQLI_BOTH) : null;
+}
+
+function mysql_num_rows($result) {
+return $result ? $result->num_rows : 0;
+}
+
+function mysql_real_escape_string($string) {
+global $mysqli;
+return $mysqli->real_escape_string($string);
+}
 
 $getid3PHP_filename = realpath('../getid3/getid3.php');
 if (!file_exists($getid3PHP_filename) || !include_once($getid3PHP_filename)) {
@@ -284,7 +305,7 @@ if (isset($ExistingTableFields['comments_all']) && ($ExistingTableFields['commen
 }
 
 
-function SynchronizeAllTags($filename, $synchronizefrom='all', $synchronizeto='A12', &$errors) {
+function SynchronizeAllTags($filename, $synchronizefrom='all', $synchronizeto='A12', &$errors = array()) {
 	global $getID3;
 
 	set_time_limit(30);
@@ -502,13 +523,13 @@ if (!empty($_REQUEST['scan']) || !empty($_REQUEST['newscan']) || !empty($_REQUES
 				}
 			}
 
-			$ParenthesesPairs = array('()', '[]', '{}');
-			foreach ($ParenthesesPairs as $pair) {
-				if (preg_match_all('/(.*) '.preg_quote($pair{0}).'(([^'.preg_quote($pair).']*[\- '.preg_quote($pair{0}).'])?(cut|dub|edit|version|live|reprise|[a-z]*mix))'.preg_quote($pair{1}).'/iU', $this_track_title, $matches)) {
-					$this_track_title = $matches[1][0];
-					$this_track_remix = implode("\t", $matches[2]);
-				}
-			}
+$ParenthesesPairs = array('()', '[]', '{}');
+foreach ($ParenthesesPairs as $pair) {
+if (preg_match_all('/(.*) '.preg_quote($pair[0]).'(([^'.preg_quote($pair).']*[\- '.preg_quote($pair[0]).'])?(cut|dub|edit|version|live|reprise|[a-z]*mix))'.preg_quote($pair[1]).'/iU', $this_track_title, $matches)) {
+$this_track_title = $matches[1][0];
+$this_track_remix = implode("\t", $matches[2]);
+}
+}
 
 
 
@@ -1350,16 +1371,16 @@ if (!empty($_REQUEST['scan']) || !empty($_REQUEST['newscan']) || !empty($_REQUES
 	$nonmatchingfilenames = 0;
 	$Pattern = $_REQUEST['filenamepattern'];
 	$PatternLength = strlen($Pattern);
-	while ($row = mysql_fetch_array($result)) {
-		set_time_limit(10);
-		$PatternFilename = '';
-		for ($i = 0; $i < $PatternLength; $i++) {
-			if (isset($patterns[$Pattern{$i}])) {
-				$PatternFilename .= trim(strtr($row[$patterns[$Pattern{$i}]], ':\\*<>|', ';-¤«»¦'), ' ');
-			} else {
-				$PatternFilename .= $Pattern{$i};
-			}
-		}
+while ($row = mysql_fetch_array($result)) {
+set_time_limit(10);
+$PatternFilename = '';
+for ($i = 0; $i < $PatternLength; $i++) {
+if (isset($patterns[$Pattern[$i]])) {
+$PatternFilename .= trim(strtr($row[$patterns[$Pattern[$i]]], ':\\*<>|', ';-¤«»¦'), ' ');
+} else {
+$PatternFilename .= $Pattern[$i];
+}
+}
 
 		// Replace "~" with "-" if characters immediately before and after are both numbers,
 		// "/" has been replaced with "~" above which is good for multi-song medley dividers,
@@ -1381,15 +1402,15 @@ if (!empty($_REQUEST['scan']) || !empty($_REQUEST['newscan']) || !empty($_REQUES
 
 			// multiple remixes are stored tab-seperated in the database.
 			// change "{2000 Version\tSomebody Remix}" into "{2000 Version} {Somebody Remix}"
-			while (preg_match('#^(.*)'.preg_quote($pair{0}).'([^'.preg_quote($pair{1}).']*)('."\t".')([^'.preg_quote($pair{0}).']*)'.preg_quote($pair{1}).'#', $PatternFilename, $matches)) {
-				$PatternFilename = $matches[1].$pair{0}.$matches[2].$pair{1}.' '.$pair{0}.$matches[4].$pair{1};
-			}
+while (preg_match('#^(.*)'.preg_quote($pair[0]).'([^'.preg_quote($pair[1]).']*)('."\t".')([^'.preg_quote($pair[0]).']*)'.preg_quote($pair[1]).'#', $PatternFilename, $matches)) {
+$PatternFilename = $matches[1].$pair[0].$matches[2].$pair[1].' '.$pair[0].$matches[4].$pair[1];
+}
 
 			// remove empty parenthesized pairs (probably where no track numbers, remix version, etc)
 			$PatternFilename = preg_replace('#'.preg_quote($pair).'#', '', $PatternFilename);
 
 			// "[01]  - Title With No Artist.mp3"  ==>  "[01] Title With No Artist.mp3"
-			$PatternFilename = preg_replace('#'.preg_quote($pair{1}).' +\- #', $pair{1}.' ', $PatternFilename);
+$PatternFilename = preg_replace('#'.preg_quote($pair[1]).' +\- #', $pair[1].' ', $PatternFilename);
 
 		}
 
@@ -1422,11 +1443,11 @@ if (!empty($_REQUEST['scan']) || !empty($_REQUEST['newscan']) || !empty($_REQUES
 				$DifferenceBoldedName  = str_replace($ActualFilenameNoExt, '</b>'.$ActualFilenameNoExt.'<b>', $PatternFilenameNoExt);
 			} else {
 				$ShortestNameLength = min(strlen($ActualFilenameNoExt), strlen($PatternFilenameNoExt));
-				for ($DifferenceOffset = 0; $DifferenceOffset < $ShortestNameLength; $DifferenceOffset++) {
-					if ($ActualFilenameNoExt{$DifferenceOffset} !== $PatternFilenameNoExt{$DifferenceOffset}) {
-						break;
-					}
-				}
+for ($DifferenceOffset = 0; $DifferenceOffset < $ShortestNameLength; $DifferenceOffset++) {
+if ($ActualFilenameNoExt[$DifferenceOffset] !== $PatternFilenameNoExt[$DifferenceOffset]) {
+break;
+}
+}
 				$DifferenceBoldedName  = '</b>'.substr($PatternFilenameNoExt, 0, $DifferenceOffset).'<b>'.substr($PatternFilenameNoExt, $DifferenceOffset);
 			}
 			$DifferenceBoldedName .= (($actualExt == $patternExt) ? '</b>'.$patternExt.'<b>' : $patternExt);
@@ -2097,17 +2118,17 @@ function CleanUpFileName($filename) {
 function BetterUCwords($string) {
 	$stringlength = strlen($string);
 
-	$string{0} = strtoupper($string{0});
-	for ($i = 1; $i < $stringlength; $i++) {
-		if (($string{$i - 1} == '\'') && ($i > 1) && (($string{$i - 2} == 'O') || ($string{$i - 2} == ' '))) {
-			// O'Clock, 'Em
-			$string{$i} = strtoupper($string{$i});
-		} elseif (preg_match('#^[\'A-Za-z0-9À-ÿ]$#', $string{$i - 1})) {
-			$string{$i} = strtolower($string{$i});
-		} else {
-			$string{$i} = strtoupper($string{$i});
-		}
-	}
+$string[0] = strtoupper($string[0]);
+for ($i = 1; $i < $stringlength; $i++) {
+if (($string[$i - 1] == '\'') && ($i > 1) && (($string[$i - 2] == 'O') || ($string[$i - 2] == ' '))) {
+// O'Clock, 'Em
+$string[$i] = strtoupper($string[$i]);
+} elseif (preg_match('#^[\'A-Za-z0-9À-ÿ]$#', $string[$i - 1])) {
+$string[$i] = strtolower($string[$i]);
+} else {
+$string[$i] = strtoupper($string[$i]);
+}
+}
 
 	static $LowerCaseWords = array('vs.', 'feat.');
 	static $UpperCaseWords = array('DJ', 'USA', 'II', 'MC', 'CD', 'TV', '\'N\'');
@@ -2119,11 +2140,11 @@ function BetterUCwords($string) {
 			$ThisWord = strtolower($ThisWord);
 		} elseif (in_array(strtoupper(str_replace('(', '', $ThisWord)), $UpperCaseWords)) {
 			$ThisWord = strtoupper($ThisWord);
-		} elseif ((substr($ThisWord, 0, 2) == 'Mc') && (strlen($ThisWord) > 2)) {
-			$ThisWord{2} = strtoupper($ThisWord{2});
-		} elseif ((substr($ThisWord, 0, 3) == 'Mac') && (strlen($ThisWord) > 3)) {
-			$ThisWord{3} = strtoupper($ThisWord{3});
-		}
+} elseif ((substr($ThisWord, 0, 2) == 'Mc') && (strlen($ThisWord) > 2)) {
+$ThisWord[2] = strtoupper($ThisWord[2]);
+} elseif ((substr($ThisWord, 0, 3) == 'Mac') && (strlen($ThisWord) > 3)) {
+$ThisWord[3] = strtoupper($ThisWord[3]);
+}
 		$OutputListOfWords[] = $ThisWord;
 	}
 	$UCstring = implode(' ', $OutputListOfWords);
